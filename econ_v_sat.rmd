@@ -1,0 +1,149 @@
+---
+title: "Osborn BSDS 100 Final Presentation"
+author: "Kyle Osborn"
+date: "12/9/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+The data used for this project is from a .csv on kaggle taken from https://profiles.doe.mass.edu/.
+The dataset includes information from 2017 on school enrollment demographics, teacher salaries, expenditures per student, etc.
+For this project I am focused on the impact of 2 specific factors on individual SAT modality scores: what percentage of the study body is "economically disadvantaged" and the average teacher salary.
+
+We will be using the packages 'tidyverse' and 'readr'.  We'll also read the .csv file into the dataframe 'ma_schools'.
+```{r libraries}
+library(tidyverse)
+library(readr)
+ma_schools<-read_csv('MA_schools_2017.csv')
+```
+The original dataset has 302 columns. This is far too many. Let's pare it down to some fundamental variables and rename them while we're at it.  Also, since we are only interested in the performance of high school students, let's get rid of schools that don't offer grades 9-12.  We can add up the values from the columns representing student enrollment for those grades and at it to a new column, 'total_hs_enrollment'.  From here, we'll just filter for the schools who have a greater than zero students in that grade. 
+```{r}
+ma_schools_refined<-ma_schools%>%
+  select('School Name','School Type','Zip','TOTAL_Enrollment',
+         '% First Language Not English','% Students With Disabilities',
+         '% High Needs','% Economically Disadvantaged','Average Salary',
+         'Average Class Size','Average Expenditures per Pupil','% African American',
+         '% Asian','% Hispanic','% White', '% Native American', '9_Enrollment',
+         '10_Enrollment','11_Enrollment','12_Enrollment','Average SAT_Reading',
+         'Average SAT_Writing','Average SAT_Math')%>%
+  rename('school_name'='School Name','school_type'='School Type','zip'='Zip',
+         'total_enrollment'='TOTAL_Enrollment',
+         'pct_non_native_english_speaker'='% First Language Not English',
+         'pct_disabilities'='% Students With Disabilities',
+         'pct_high_needs'='% High Needs',
+         'pct_econ_disadv'='% Economically Disadvantaged',
+         'avg_salary'='Average Salary',
+         'avg_class_size'='Average Class Size',
+         'avg_expend_per_pupil'='Average Expenditures per Pupil',
+         'pct_afr_am'='% African American',
+         'pct_asian'='% Asian', 'pct_hispanic'='% Hispanic', 'pct_white'='% White',
+         'pct_nat_am'='% Native American','grade_9_total'='9_Enrollment',
+         'grade_10_total'='10_Enrollment','grade_11_total'='11_Enrollment',
+         'grade_12_total'='12_Enrollment','avg_sat_read'='Average SAT_Reading',
+         'avg_sat_write'='Average SAT_Writing','avg_sat_math'='Average SAT_Math')%>%
+  mutate(total_hs_enrollment= grade_9_total + grade_10_total + grade_11_total +
+           grade_12_total)%>%
+  filter(total_hs_enrollment>0)
+num <- sapply(ma_schools_refined, is.numeric)
+hs_corr_data <- ma_schools_refined[,num]
+```
+Now, since we're going to be looking at SAT scores as a function of various other factors, we'll have to get rid of any observations that do not have an SAT score. We'll also create a new variable for the average SAT score that we won't use until later.
+```{r}
+ma_schools_tidy<-na.omit(ma_schools_refined)
+
+hs_corr_complete<-hs_corr_data%>%
+  mutate(avg_sat=(avg_sat_math+avg_sat_read+avg_sat_write)/3)
+
+str(hs_corr_complete)
+```
+
+Let's take a look at a school's percentage of economically disadvantaged students and its impact on the SAT math, reading and writing scores respectively.
+```{r}
+econ_disadv_math<- ggplot(hs_corr_data, aes(pct_econ_disadv,avg_sat_math))
+econ_disadv_math + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "% of Economically Disadvantaged vs. Average SAT Math Scores")
+
+cor(hs_corr_data$avg_sat_math,hs_corr_data$pct_econ_disadv)
+
+linear_mod_math<-lm(avg_sat_math~pct_econ_disadv,hs_corr_data)
+```
+
+```{r}
+econ_disadv_read<- ggplot(hs_corr_data, aes(pct_econ_disadv,avg_sat_read))
+econ_disadv_read + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "% of Economically Disadvantaged vs. Average SAT Reading Scores")
+
+cor(hs_corr_data$avg_sat_read,hs_corr_data$pct_econ_disadv)
+
+linear_mod_read<-lm(avg_sat_read~pct_econ_disadv,hs_corr_data)
+```
+
+```{r}
+econ_disadv_write<- ggplot(hs_corr_data, aes(pct_econ_disadv,avg_sat_write))
+econ_disadv_write + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "% of Economically Disadvantaged vs. Average SAT Writing Scores")
+
+cor(hs_corr_data$avg_sat_write,hs_corr_data$pct_econ_disadv)
+
+linear_mod_write<-lm(avg_sat_write~pct_econ_disadv,hs_corr_data)
+```
+Ok, it looks like each component of the SAT is similarly impacted by a schools proportion of economically disadvantaged students. Now let's see if a teachers' salary is as impactful.
+```{r}
+avg_sal_v_math<- ggplot(hs_corr_data, aes(avg_salary,avg_sat_math))
+avg_sal_v_math + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "Teacher Salary vs. Average SAT Math Scores")
+
+cor(hs_corr_data$avg_sat_math,hs_corr_data$avg_salary)
+
+linear_mod_math2<-lm(avg_sat_math~avg_salary,hs_corr_data)
+
+summary(linear_mod_math2)
+```
+
+```{r}
+avg_sal_v_read<- ggplot(hs_corr_data, aes(avg_salary,avg_sat_read))
+avg_sal_v_read + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "Teacher Salary vs. Average SAT Reading Scores")
+
+cor(hs_corr_data$avg_sat_read,hs_corr_data$avg_salary)
+
+linear_mod_read2<-lm(avg_sat_read~avg_salary,hs_corr_data)
+
+summary(linear_mod_read2)
+```
+
+```{r}
+avg_sal_v_write<- ggplot(hs_corr_data, aes(avg_salary,avg_sat_write))
+avg_sal_v_write + geom_point()+
+  geom_smooth(method = "lm", se = FALSE)+
+  labs(title = "Teacher Salary vs. Average SAT Writing Scores")
+
+cor(hs_corr_data$avg_sat_write,hs_corr_data$avg_salary)
+
+linear_mod_write2<-lm(avg_sat_math~avg_salary,hs_corr_data)
+
+summary(linear_mod_write2)
+```
+So, not nearly as important as economic disadvantage in predicting SAT scores.
+
+Finally, we'll take a look at what R has to say after we run both factors in a linear model.  In this model, instead of individual SAT scores, we'll use the feature we created above that has an average of the SAT scores for each individual school.
+
+```{r}
+linear_model_adv<-lm(avg_sat~pct_econ_disadv+
+                       avg_salary,hs_corr_complete)
+summary(linear_model_adv)
+```
+Not surprisingly, this confirms what we suspected: economic disadvantage plays a much bigger role in a student's SAT score than does the teacher's salary.
+
